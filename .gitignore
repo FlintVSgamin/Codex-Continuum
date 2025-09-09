@@ -10,3 +10,9 @@ dist/
 
 # Env
 .env
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/.cache/
+backend/models/
