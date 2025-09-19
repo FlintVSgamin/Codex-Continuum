@@ -36,7 +36,7 @@ export default function App() {
     setResult(mockResponse);
     setStatus("Done");
   };
-
+  const isLoading = typeof status === "string" && status.toLowerCase().startsWith("processing");
   return (
     <div className="container">
       <h1>Latin OCR → Translation (OCR)</h1>
@@ -69,6 +69,11 @@ export default function App() {
               Run
             </button>
             <span className="status">{status}</span>
+            {isLoading && (
+                <div className="progress" role="status" aria-live="polite" aria-label="Processing">
+                <div className="progress-bar" />
+  </div>
+)}
           </div>
         </div>
 
