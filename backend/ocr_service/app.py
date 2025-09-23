@@ -1,10 +1,23 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse
 from PIL import Image
+from fastapi.middleware.cors import CORSMiddleware
 import io, subprocess, os, tempfile
 import pytesseract
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_origin_regex=r"^http://localhost:\d+$",  # also allow other localhost dev ports
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def ocr_tesseract(img_bytes: bytes, psm: str = "6", lang: str = "lat") -> str:
     img = Image.open(io.BytesIO(img_bytes))
@@ -43,3 +56,4 @@ async def ocr(
     else:
         text = ocr_tesseract(img_bytes, psm=psm, lang=lang)
     return JSONResponse({"engine": engine, "lang": lang, "text": text})
+

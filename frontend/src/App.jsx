@@ -20,22 +20,33 @@ export default function App() {
     if (f) setFile(f);
   };
 
-  const runMockPipeline = async () => {
+  //Backend call
+  const runPipeline = async () => {
     if (!file) return;
     setStatus("Processing ...");
     setResult(null);
 
-    //Simulate backend 
-    await new Promise((r) => setTimeout(r, 1000));
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("psm", "6");
+    fd.append("lang", "lat");
+    fd.append("engine", "tesseract");
 
-    const mockResponse = {
-      latin_raw: "Hoc output tantum locum reservatum est.",
-      english: "This output is just a placeholder"
-    };
-
-    setResult(mockResponse);
-    setStatus("Done");
+    try {
+      const resp = await fetch("http://localhost:8000/ocr", {
+        method: "POST",
+        body: fd,
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      setResult({
+        latin_raw: data.latin ?? data.text ?? "",
+        english: data.english ?? "",
+      });
+      setStatus("Done");
+    } catch (err) {setStatus(`Error: ${err.message}`);}
   };
+
   const isLoading = typeof status === "string" && status.toLowerCase().startsWith("processing");
   return (
     <div className="container">
@@ -65,15 +76,15 @@ export default function App() {
           )}
 
           <div className="actions">
-            <button className="primary" disabled={!file} onClick={runMockPipeline}>
+            <button className="primary" disabled={!file} onClick={runPipeline}>
               Run
             </button>
             <span className="status">{status}</span>
             {isLoading && (
-                <div className="progress" role="status" aria-live="polite" aria-label="Processing">
+              <div className="progress" role="status" aria-live="polite" aria-label="Processing">
                 <div className="progress-bar" />
-  </div>
-)}
+              </div>
+            )}
           </div>
         </div>
 
