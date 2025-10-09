@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 
 /** Backend endpoint + constants */
-const API_URL = "http://localhost:8000/ocr";
+const API_URL = "http://127.0.0.1:8000/ocr";   // use 127.0.0.1 to avoid WSL host issues
 const PAGE_SEP = "\n\n--- page break ---\n\n";
 
 export default function App() {
@@ -136,8 +136,8 @@ export default function App() {
           {result && (
             <div className="results">
               <p style={{ color: "#555", marginTop: 0 }}>
-                Processed in <b>{result.meta?.duration_ms ?? "?"}</b> ms •
-                {" "}Pages: <b>{result.meta?.pages ?? (result.pages?.length || 1)}</b>
+                Processed in <b>{result.meta?.duration_ms ?? "?"}</b> ms •{" "}
+                Pages: <b>{result.meta?.pages ?? (result.pages?.length || 1)}</b>
               </p>
 
               {result.pages?.map((p, i) => (
