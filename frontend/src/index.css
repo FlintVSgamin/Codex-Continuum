@@ -91,6 +91,7 @@ h1 {
   border-radius: 12px;
   padding: 16px;
   height: 283px;
+  overflow-y: auto; 
 }
 
 .output-panel h2 {
