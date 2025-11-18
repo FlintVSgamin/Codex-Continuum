@@ -1,4 +1,15 @@
 fastapi
-uvicorn[standard]
+uvicorn
+pillow
+pytesseract
+python-multipart
+
+# PDF support
+pdf2image
+
+# Optional OCR engine (CLI used via subprocess)
+kraken
+
+# Completion / ML stack
 tensorflow
-numpy
+scikit-learn
