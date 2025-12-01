@@ -127,4 +127,11 @@ if __name__ == "__main__":
     print(correctedText)
     #subprocess will capture this output
 
+<<<<<<< HEAD
+=======
+    correctedText = textCorrection(args.ocrText, threshold)
+    print(correctedText)
+    #subprocess will capture this output
+
+>>>>>>> refs/remotes/origin/mlDeveloping
     
