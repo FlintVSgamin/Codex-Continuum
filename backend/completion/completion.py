@@ -102,8 +102,9 @@ def textCorrection(text, thresholdStatic):
             
     return text
 
-print(textCorrection("Maxima pars Graium Saturno et maxKme AthKnae", 0.001))
-exit()
+#Example run
+#print(textCorrection("Maxima pars Graium Saturno et maxKme AthKnae", 0.001))
+#exit()
 #this file is called on from the CLI using subprocess. in that instance, the value of __name__ is '__main__'
 #it must be called using subprocess, as it expects the source to be the 'backend/completion/transformerEnv/' interpreter or venv
 
