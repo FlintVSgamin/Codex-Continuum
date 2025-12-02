@@ -1,6 +1,15 @@
 # Codex-Continuum
  OCR tool that translates incomplete or damaged Latin transcripts into English while auto filling missing characters and words.
 
+#Getting Started
+#Step 1: Start the UI
+npm run build
+npm run dev
+
+#TODO Step 2: Run the OCR Service
+cd backend 
+cd ocr_service
+uvicorn app:app --reload --host 0.0.0.0 --port 8000
 
 # Testing & Coverage
 We use pytest with coverage. Run everything from the project root.
