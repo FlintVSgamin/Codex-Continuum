@@ -14,7 +14,6 @@ exampleThreshold = "1/32"
 #The result of this subprocess will be the returned value from completion.textCorrection() 
 #getting printed on the command line via stdout. Below, I use result.stdout.strip() to get this value
 
-#Also, 
 result = subprocess.run(
     [venv, script, exampleOCRText, exampleThreshold],
     capture_output= True,

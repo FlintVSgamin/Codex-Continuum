@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import os
+import re
 from sklearn.model_selection import train_test_split
 
 #important model variables
@@ -26,6 +27,7 @@ def readAndCleanInput():
         if not char.isnumeric():
             if char.isalpha() or char == ' ' or char == '.' or char == '?' or char =='!' or char == ',' or char == ';' or char == '-':
                 text += char
+    text = re.sub(r"\s+", " ", text)
     with open(cleanCorpusPath, "w") as f:
         f.write(text)
         
@@ -121,5 +123,6 @@ def trainAndSaveModel():
     model = tf.keras.Model(inputs = inlayer, outputs = outlayer)
     model.summary()
     model.compile(optimizer = tf.keras.optimizers.Adam(), loss = tf.keras.losses.SparseCategoricalCrossentropy(), metrics = ['accuracy'])
-    model.fit(trainDataset, epochs = 25, validation_data = validDataset)
+    model.fit(trainDataset, epochs = 20, validation_data = validDataset)
     model.save('generator.keras')
+trainAndSaveModel()
