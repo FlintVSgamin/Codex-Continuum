@@ -59,7 +59,7 @@ First-time setup:
 
 ```bash
 python -m pip install -U pip
-python -m pip install -r backend/requirements.txt
+python -m pip install -r backend/ocr_service/requirements.txt
 python -m pip install pytest pytest-cov
 ```
 
