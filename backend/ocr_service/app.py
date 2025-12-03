@@ -9,10 +9,15 @@ from pytesseract import Output
 
 import io
 import os
+import sys
 import time
 import subprocess
 import tempfile
 import statistics
+
+# Add backend to path for imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from translation.groqTranslation import webTranslation
 
 # ------------------------- FastAPI -------------------------
 app = FastAPI()
@@ -337,7 +342,17 @@ async def ocr(
             whitelist=whitelist
         )
 
-        return JSONResponse({"engine": engine, "lang": lang, "text": text, "meta": meta})
+        # Translate the OCR'd text to English
+        translation = ""
+        try:
+            if text.strip():
+                translation = webTranslation(text)
+        except Exception as e:
+            # Log the error but don't fail the request
+            print(f"Translation failed: {e}")
+            translation = "Translation failed"
+
+        return JSONResponse({"engine": engine, "lang": lang, "text": text, "translation": translation, "meta": meta})
 
     except HTTPException:
         raise

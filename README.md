@@ -1,14 +1,29 @@
 # Codex-Continuum
  OCR tool that translates incomplete or damaged Latin transcripts into English while auto filling missing characters and words.
 
-#Getting Started
-#Step 1: Start the UI
+# Getting Started
+# Step 1: Start the UI
+cd frontend
 npm run build
 npm run dev
 
-#TODO Step 2: Run the OCR Service
-cd backend 
-cd ocr_service
+Visit the provided localhost URL (usually http://localhost:5173) and ensure the frontend hits http://localhost:8000/ocr once you have completed step 2.
+
+# Step 2: Run the OCR Service
+# In WSL
+cd Codex-Continuum-main/backend/ocr_service
+
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install --upgrade pip
+pip install -r requirements.txt
+pip install openai  # for Groq translation
+
+Set the Groq API key:
+export GROQAPIKEY="gsk_your_real_key_here"
+
+Run the backend:
 uvicorn app:app --reload --host 0.0.0.0 --port 8000
 
 # Testing & Coverage

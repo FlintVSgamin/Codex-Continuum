@@ -1,17 +1,17 @@
 import React from "react";
 import { useState, useCallback } from "react";
 
-/** Backend endpoint + constants */
-const API_URL = "http://127.0.0.1:8000/ocr";   // use 127.0.0.1 to avoid WSL host issues
+/** Backend endpoint constants */
+const API_URL = "http://127.0.0.1:8000/ocr";
 const PAGE_SEP = "\n\n--- page break ---\n\n";
 
 export default function App() {
   const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [status, setStatus] = useState("");
-  const [result, setResult] = useState(null); // { latin_raw, english, meta, pages[] }
-  const [engine, setEngine] = useState("tesseract"); // future-proof
-  const [psm, setPsm] = useState("");                // "" = auto → 7(img)/6(pdf)
+  const [result, setResult] = useState(null); 
+  const [engine, setEngine] = useState("tesseract");
+  const [psm, setPsm] = useState("");                
 
   // Drag & drop
   const onDrop = useCallback((e) => {
@@ -54,10 +54,11 @@ export default function App() {
       const text = j?.text || "";
       const pages = text.split(PAGE_SEP);
       const meta = j?.meta || {};
+      const english = j?.translation || "";
 
       setResult({
         latin_raw: text,
-        english: "(translation pending)",
+        english: english,
         pages,
         meta,
       });
@@ -101,7 +102,6 @@ export default function App() {
               Engine:
               <select value={engine} onChange={(e) => setEngine(e.target.value)} style={{ marginLeft: 8 }}>
                 <option value="tesseract">tesseract</option>
-                {/* <option value="kraken" disabled>kraken (images only)</option> */}
               </select>
             </label>
 
