@@ -34,8 +34,10 @@ app.add_middleware(
 PAGE_SEP = "\n\n--- page break ---\n\n"
 ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".pdf"}
 
+
 def infer_ext(filename: str) -> str:
     return (os.path.splitext(filename or "")[1] or "").lower()
+
 
 def preprocess(img: Image.Image) -> Image.Image:
     """
@@ -53,6 +55,7 @@ def preprocess(img: Image.Image) -> Image.Image:
     #            left, top, right, bottom   (right made larger)
     img = ImageOps.expand(img, border=(12, 8, 36, 8), fill=255)
     return img
+
 
 def _reconstruct_from_chars(
     img: Image.Image,
@@ -82,8 +85,8 @@ def _reconstruct_from_chars(
         ch, x1, y1, x2, y2, _ = parts[0], int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4]), parts[5]
         cx = (x1 + x2) / 2.0
         cy = (y1 + y2) / 2.0
-        w  = (x2 - x1)
-        h  = (y2 - y1)
+        w = (x2 - x1)
+        h = (y2 - y1)
         chars.append((ch, x1, y1, x2, y2, cx, cy, w, h))  # (char, l,b,r,t, cx,cy, w,h)
 
     if not chars:
@@ -93,8 +96,8 @@ def _reconstruct_from_chars(
     chars.sort(key=lambda c: (-c[6], c[5]))
 
     heights = [c[8] for c in chars if c[8] > 0]
-    med_h   = statistics.median(heights) if heights else 1.0
-    y_tol   = max(3, int(0.35 * med_h))  # looser so one real line doesn't split
+    med_h = statistics.median(heights) if heights else 1.0
+    y_tol = max(3, int(0.35 * med_h))  # looser so one real line doesn't split
 
     # Group into lines by y proximity
     lines, line = [], [chars[0]]
@@ -118,12 +121,12 @@ def _reconstruct_from_chars(
             gaps.append(gap)
 
         median_gap = statistics.median(gaps) if gaps else 0
-        avg_w      = max(1.0, sum(c[7] for c in ln) / len(ln))
+        avg_w = max(1.0, sum(c[7] for c in ln) / len(ln))
 
         # More conservative about inserting spaces (prevents "pa rtes")
-        thr_from_gaps  = max(3.0, median_gap * 1.8)  # was 1.6
-        thr_from_width = 0.60 * avg_w                # was 0.50
-        gap_threshold  = max(thr_from_gaps, thr_from_width)
+        thr_from_gaps = max(3.0, median_gap * 1.8)  # was 1.6
+        thr_from_width = 0.60 * avg_w              # was 0.50
+        gap_threshold = max(thr_from_gaps, thr_from_width)
 
         s = [ln[0][0]]
         for prev, cur in zip(ln, ln[1:]):
@@ -141,6 +144,7 @@ def _reconstruct_from_chars(
             rebuilt = [" ".join(s for s in rebuilt if s.strip())]
 
     return "\n".join(rebuilt)
+
 
 def ocr_tesseract_words(
     img: Image.Image,
@@ -216,6 +220,7 @@ def ocr_tesseract_words(
         return char_alt
     return joinedA
 
+
 def ocr_image_pil(
     img_pil: Image.Image,
     psm: str = "6",
@@ -225,6 +230,7 @@ def ocr_image_pil(
 ) -> str:
     img = preprocess(img_pil)
     return ocr_tesseract_words(img, psm=psm, lang=lang, oem=oem, whitelist=whitelist)
+
 
 def ocr_tesseract(
     img_bytes: bytes,
@@ -236,6 +242,7 @@ def ocr_tesseract(
     img = Image.open(io.BytesIO(img_bytes))
     img = preprocess(img)
     return ocr_tesseract_words(img, psm=psm, lang=lang, oem=oem, whitelist=whitelist)
+
 
 def ocr_kraken(img_bytes: bytes, model_id: str | None = None) -> str:
     """
@@ -253,6 +260,7 @@ def ocr_kraken(img_bytes: bytes, model_id: str | None = None) -> str:
         return out.stdout.decode("utf-8", errors="ignore")
     finally:
         os.remove(tmp_path)
+
 
 def ocr_bytes_auto(
     file_bytes: bytes,
@@ -303,6 +311,7 @@ def ocr_bytes_auto(
 def ping():
     return {"ok": True}
 
+
 @app.post("/ocr")
 async def ocr(
     file: UploadFile = File(...),
@@ -342,7 +351,7 @@ async def ocr(
             whitelist=whitelist
         )
 
-        # Translate the OCR'd text to English
+        # Translate the OCR'd text to English using Groq/OpenAI
         translation = ""
         try:
             if text.strip():
@@ -352,10 +361,17 @@ async def ocr(
             print(f"Translation failed: {e}")
             translation = "Translation failed"
 
-        return JSONResponse({"engine": engine, "lang": lang, "text": text, "translation": translation, "meta": meta})
+        # Return both 'translation' and 'english' for frontend convenience
+        return JSONResponse({
+            "engine": engine,
+            "lang": lang,
+            "text": text,
+            "translation": translation,   # original field
+            "english": translation,       # alias for the same value
+            "meta": meta,
+        })
 
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR failed: {e}")
-
