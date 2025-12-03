@@ -1,76 +1,58 @@
-import pytest
-from PIL import Image, UnidentifiedImageError
-import shutil
+# tests/backend/test_ocr_service.py
 
-#Import your OCR service module directly
+import pytest
+from PIL import Image
+from fastapi.testclient import TestClient
+
 import backend.ocr_service.app as ocr_service
 
 
-def test_cors_headers_exist():
-    """Skip gracefully if CORS headers not found."""
-    # The FastAPI app instance lives in backend.ocr_service.app
+def test_ping_endpoint_works():
+    """Basic smoke test for the OCR FastAPI app."""
     app_instance = getattr(ocr_service, "app", None)
-    if not app_instance:
-        pytest.skip("Skipping: OCR FastAPI app not available.")
+    assert app_instance is not None, "FastAPI app should exist in backend.ocr_service.app"
 
-    from fastapi.testclient import TestClient
     client = TestClient(app_instance)
-
-    response = client.get("/ping")
-    header_keys = [h.lower() for h in response.headers.keys()]
-    if "access-control-allow-origin" not in header_keys:
-        pytest.skip("Skipping: CORS headers not exposed in this environment.")
-    assert "access-control-allow-origin" in header_keys
+    resp = client.get("/ping")
+    # Just verify the endpoint responds
+    assert resp.status_code == 200
 
 
 @pytest.mark.parametrize("mode", ["normal", "fallback"])
-def test_ocr_tesseract_words(monkeypatch, mode):
-    """Mock pytesseract or skip if Tesseract not installed."""
-    if not hasattr(ocr_service, "ocr_tesseract_words"):
-        pytest.skip("Skipping: ocr_tesseract_words not implemented.")
+def test_ocr_tesseract_words_modes(monkeypatch, mode):
+    """Exercise ocr_tesseract_words with mocked Tesseract in both normal and fallback cases."""
+    img = Image.new("RGB", (10, 10))
 
-    if shutil.which("tesseract") is None:
-        pytest.skip("Skipping: Tesseract not installed in system PATH.")
-
-    img = Image.new("RGB", (10, 10), color="white")
-
-    def mock_image_to_data(*args, **kwargs):
+    def fake_image_to_data(*args, **kwargs):
         if mode == "normal":
+            # "Normal" TSV output with real words
             return {
-                "text": ["mock"],
-                "conf": [90],
-                "block_num": [1],
-                "par_num": [1],
-                "line_num": [1],
+                "text": ["lorem", "ipsum"],
+                "conf": [90, 95],
+                "block_num": [0, 0],
+                "par_num": [1, 1],
+                "line_num": [1, 1],
+                "word_num": [1, 2],
             }
-        return {"text": [""], "conf": [0], "block_num": [1], "par_num": [1], "line_num": [1]}
+        else:
+            # Collapsed TSV that should force internal fallback path
+            return {
+                "text": [""],
+                "conf": [-1],
+                "block_num": [0],
+                "line_num": [0],
+                "word_num": [0],
+            }
 
-    monkeypatch.setattr("pytesseract.image_to_data", mock_image_to_data)
-    result = ocr_service.ocr_tesseract_words(img)
-    assert isinstance(result, str), "ocr_tesseract_words() should return a string."
+    def fake_image_to_boxes(*args, **kwargs):
+        # Simple char-box fallback
+        return "a 0 0 5 5 0\nb 0 0 5 5 0"
 
+    # Patch pytesseract inside the ocr_service module
+    monkeypatch.setattr("backend.ocr_service.app.pytesseract.image_to_data", fake_image_to_data)
+    monkeypatch.setattr("backend.ocr_service.app.pytesseract.image_to_boxes", fake_image_to_boxes)
 
-def test_ocr_function_returns_string(monkeypatch):
-    """Ensures OCR function returns a string, skipping if Tesseract not installed."""
-    func = getattr(ocr_service, "ocr_tesseract", None)
-    if not callable(func):
-        pytest.skip("Skipping: ocr_tesseract callable not found.")
+    text = ocr_service.ocr_tesseract_words(img)
 
-    # ✅ Skip if tesseract binary is missing
-    import shutil
-    if shutil.which("tesseract") is None:
-        pytest.skip("Skipping: Tesseract not installed or not in PATH.")
-
-    # Mock PIL.Image.open to avoid image parsing errors
-    monkeypatch.setattr("PIL.Image.open", lambda *_: Image.new("RGB", (10, 10)))
-    # Mock pytesseract to avoid real OCR calls
-    monkeypatch.setattr("pytesseract.image_to_data", lambda *a, **kw: {"text": ["fake"], "conf": [100]})
-    monkeypatch.setattr("pytesseract.image_to_boxes", lambda *a, **kw: "a 0 0 1 1 0")
-    monkeypatch.setattr(ocr_service, func.__name__, lambda *_: "mock result text")
-
-    try:
-        result = func(b"fake data")
-    except Exception as e:
-        pytest.skip(f"Skipping: OCR function depends on system OCR tools ({e}).")
-
-    assert isinstance(result, str), "OCR callable should return a string."
+    assert isinstance(text, str)
+    assert text.strip() != ""
