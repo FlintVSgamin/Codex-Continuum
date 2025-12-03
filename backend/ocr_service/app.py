@@ -14,10 +14,104 @@ import time
 import subprocess
 import tempfile
 import statistics
+import json
 
-# Add backend to path for imports
+from openai import OpenAI  # for Groq-compatible client
+
+# Add backend to path for imports (if you still need other modules later)
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from translation.groqTranslation import webTranslation
+
+# ------------------------- Groq / OpenAI client -------------------------
+GROQ_API_KEY = os.getenv("GROQAPIKEY")
+
+if GROQ_API_KEY:
+    groq_client = OpenAI(
+        api_key=GROQ_API_KEY,
+        base_url="https://api.groq.com/openai/v1",
+    )
+else:
+    groq_client = None
+    print("WARNING: GROQAPIKEY is not set; LLM postprocessing will be disabled.")
+
+def postprocess_ocr_with_llm(ocr_text: str) -> dict:
+    """
+    Use Groq/OpenAI to:
+      - Fix OCR transcription errors (corrected_latin)
+      - Translate to English (english_translation)
+      - Provide a brief explanation / context (explanation)
+
+    Returns a dict like:
+      {
+        "corrected_latin": "...",
+        "english_translation": "...",
+        "explanation": "..."
+      }
+    """
+    if not groq_client:
+        raise RuntimeError("GROQAPIKEY not set; cannot call LLM postprocessing.")
+
+    prompt = f"""
+You are helping clean and interpret noisy OCR output from Latin printed texts.
+
+The text below comes from Tesseract OCR and may contain:
+- OCR letter errors (u/v, i/j, rn vs m, etc.),
+- missing or extra spaces,
+- punctuation errors,
+- other small transcription mistakes.
+
+TASKS:
+1. Reconstruct the most likely correct Latin text.
+2. Translate the corrected Latin into clear, natural English.
+3. Briefly explain the context in 1–3 sentences (e.g., what is being described, who/what is mentioned).
+
+IMPORTANT RULES:
+- If a word is obviously an OCR glitch, fix it to the most likely Latin word.
+- Preserve the original meaning as much as possible.
+- If something is unreadable, make your best guess but do NOT invent long new content.
+
+OUTPUT FORMAT (JSON ONLY, no extra commentary or text before/after):
+{{
+  "corrected_latin": "...",
+  "english_translation": "...",
+  "explanation": "..."
+}}
+
+Here is the OCR text:
+
+<<<
+{ocr_text}
+>>>
+"""
+
+    resp = groq_client.responses.create(
+        model="openai/gpt-oss-20b",
+        input=prompt,
+        temperature=0.2,
+    )
+
+    raw = resp.output_text.strip()
+
+    # Try to parse JSON; if the model wraps it, try to salvage the JSON block
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        try:
+            start = raw.index("{")
+            end = raw.rindex("}") + 1
+            data = json.loads(raw[start:end])
+        except Exception:
+            data = {
+                "corrected_latin": ocr_text,
+                "english_translation": "",
+                "explanation": "LLM output was not valid JSON; returning raw OCR as corrected_latin.",
+            }
+
+    # Ensure required keys exist
+    data.setdefault("corrected_latin", ocr_text)
+    data.setdefault("english_translation", "")
+    data.setdefault("explanation", "")
+
+    return data
 
 # ------------------------- FastAPI -------------------------
 app = FastAPI()
@@ -34,8 +128,10 @@ app.add_middleware(
 PAGE_SEP = "\n\n--- page break ---\n\n"
 ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".pdf"}
 
+
 def infer_ext(filename: str) -> str:
     return (os.path.splitext(filename or "")[1] or "").lower()
+
 
 def preprocess(img: Image.Image) -> Image.Image:
     """
@@ -53,6 +149,7 @@ def preprocess(img: Image.Image) -> Image.Image:
     #            left, top, right, bottom   (right made larger)
     img = ImageOps.expand(img, border=(12, 8, 36, 8), fill=255)
     return img
+
 
 def _reconstruct_from_chars(
     img: Image.Image,
@@ -82,8 +179,8 @@ def _reconstruct_from_chars(
         ch, x1, y1, x2, y2, _ = parts[0], int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4]), parts[5]
         cx = (x1 + x2) / 2.0
         cy = (y1 + y2) / 2.0
-        w  = (x2 - x1)
-        h  = (y2 - y1)
+        w = (x2 - x1)
+        h = (y2 - y1)
         chars.append((ch, x1, y1, x2, y2, cx, cy, w, h))  # (char, l,b,r,t, cx,cy, w,h)
 
     if not chars:
@@ -93,8 +190,8 @@ def _reconstruct_from_chars(
     chars.sort(key=lambda c: (-c[6], c[5]))
 
     heights = [c[8] for c in chars if c[8] > 0]
-    med_h   = statistics.median(heights) if heights else 1.0
-    y_tol   = max(3, int(0.35 * med_h))  # looser so one real line doesn't split
+    med_h = statistics.median(heights) if heights else 1.0
+    y_tol = max(3, int(0.35 * med_h))  # looser so one real line doesn't split
 
     # Group into lines by y proximity
     lines, line = [], [chars[0]]
@@ -118,12 +215,12 @@ def _reconstruct_from_chars(
             gaps.append(gap)
 
         median_gap = statistics.median(gaps) if gaps else 0
-        avg_w      = max(1.0, sum(c[7] for c in ln) / len(ln))
+        avg_w = max(1.0, sum(c[7] for c in ln) / len(ln))
 
         # More conservative about inserting spaces (prevents "pa rtes")
-        thr_from_gaps  = max(3.0, median_gap * 1.8)  # was 1.6
-        thr_from_width = 0.60 * avg_w                # was 0.50
-        gap_threshold  = max(thr_from_gaps, thr_from_width)
+        thr_from_gaps = max(3.0, median_gap * 1.8)
+        thr_from_width = 0.60 * avg_w
+        gap_threshold = max(thr_from_gaps, thr_from_width)
 
         s = [ln[0][0]]
         for prev, cur in zip(ln, ln[1:]):
@@ -141,6 +238,7 @@ def _reconstruct_from_chars(
             rebuilt = [" ".join(s for s in rebuilt if s.strip())]
 
     return "\n".join(rebuilt)
+
 
 def ocr_tesseract_words(
     img: Image.Image,
@@ -202,7 +300,6 @@ def ocr_tesseract_words(
         dataB = _tsv("6")
         tokensB, joinedB = _rebuild_from_tsv(dataB)
         if tokensB > 1 and (" " in joinedB or len(joinedB) <= 8):
-            # Best-of vs char fallback (require >=10% longer to switch)
             char_alt = _reconstruct_from_chars(img, psm=(psm or "7"), lang=lang, oem=oem, whitelist=whitelist)
             if char_alt and len(char_alt) >= int(len(joinedB) * 1.10):
                 return char_alt
@@ -216,6 +313,7 @@ def ocr_tesseract_words(
         return char_alt
     return joinedA
 
+
 def ocr_image_pil(
     img_pil: Image.Image,
     psm: str = "6",
@@ -225,6 +323,7 @@ def ocr_image_pil(
 ) -> str:
     img = preprocess(img_pil)
     return ocr_tesseract_words(img, psm=psm, lang=lang, oem=oem, whitelist=whitelist)
+
 
 def ocr_tesseract(
     img_bytes: bytes,
@@ -236,6 +335,7 @@ def ocr_tesseract(
     img = Image.open(io.BytesIO(img_bytes))
     img = preprocess(img)
     return ocr_tesseract_words(img, psm=psm, lang=lang, oem=oem, whitelist=whitelist)
+
 
 def ocr_kraken(img_bytes: bytes, model_id: str | None = None) -> str:
     """
@@ -253,6 +353,7 @@ def ocr_kraken(img_bytes: bytes, model_id: str | None = None) -> str:
         return out.stdout.decode("utf-8", errors="ignore")
     finally:
         os.remove(tmp_path)
+
 
 def ocr_bytes_auto(
     file_bytes: bytes,
@@ -303,6 +404,7 @@ def ocr_bytes_auto(
 def ping():
     return {"ok": True}
 
+
 @app.post("/ocr")
 async def ocr(
     file: UploadFile = File(...),
@@ -342,17 +444,34 @@ async def ocr(
             whitelist=whitelist
         )
 
-        # Translate the OCR'd text to English
-        translation = ""
-        try:
-            if text.strip():
-                translation = webTranslation(text)
-        except Exception as e:
-            # Log the error but don't fail the request
-            print(f"Translation failed: {e}")
-            translation = "Translation failed"
+        # Default values if LLM is unavailable
+        corrected_latin = text
+        english = ""
+        explanation = ""
 
-        return JSONResponse({"engine": engine, "lang": lang, "text": text, "translation": translation, "meta": meta})
+        # Only call LLM if there's text and we have an API key
+        if text.strip() and groq_client is not None:
+            try:
+                processed = postprocess_ocr_with_llm(text)
+                corrected_latin = processed.get("corrected_latin", text)
+                english = processed.get("english_translation", "")
+                explanation = processed.get("explanation", "")
+            except Exception as e:
+                print(f"LLM postprocessing failed: {e}")
+                explanation = f"LLM postprocessing failed: {e}"
+
+        elif text.strip() and groq_client is None:
+            explanation = "LLM postprocessing disabled (no GROQAPIKEY set)."
+
+        return JSONResponse({
+            "engine": engine,
+            "lang": lang,
+            "text": text,                 # raw OCR
+            "corrected_latin": corrected_latin,  # AI-cleaned Latin
+            "english": english,           # AI translation
+            "explanation": explanation,   # brief context/notes
+            "meta": meta
+        })
 
     except HTTPException:
         raise
