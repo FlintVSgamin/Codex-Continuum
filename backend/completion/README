@@ -1,4 +1,4 @@
-This part of the backend uses its own virtual environment
+This part of the backend optionally uses its own virtual environment
 To set it up run
 python3 -m venv transformerEnv
 source venv/bin/activate
