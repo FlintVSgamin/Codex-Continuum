@@ -125,4 +125,3 @@ def trainAndSaveModel():
     model.compile(optimizer = tf.keras.optimizers.Adam(), loss = tf.keras.losses.SparseCategoricalCrossentropy(), metrics = ['accuracy'])
     model.fit(trainDataset, epochs = 20, validation_data = validDataset)
     model.save('generator.keras')
-trainAndSaveModel()
