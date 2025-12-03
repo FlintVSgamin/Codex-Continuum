@@ -358,3 +358,4 @@ async def ocr(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR failed: {e}")
+
